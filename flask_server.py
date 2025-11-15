@@ -165,13 +165,18 @@ def fill_document():
         # Remplir le document
         output_path, output_filename = fill_suivi_formation(data, TEMPLATE_PATH)
         
-        # Retourner le fichier
-        return send_file(
-            output_path,
-            as_attachment=True,
-            download_name=output_filename,
-            mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-        )
+        # Lire le fichier en base64 pour Make.com
+        import base64
+        with open(output_path, 'rb') as f:
+            file_data = base64.b64encode(f.read()).decode('utf-8')
+        
+        # Retourner en JSON avec le fichier en base64
+        return jsonify({
+            'success': True,
+            'filename': output_filename,
+            'data': file_data,
+            'mime_type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        })
     
     except Exception as e:
         return jsonify({
