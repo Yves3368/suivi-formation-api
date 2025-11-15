@@ -227,7 +227,78 @@ def test_fill():
             'type': type(e).__name__
         }), 500
 
+# Stockage temporaire en mémoire pour les fichiers générés
+import uuid
+from datetime import datetime, timedelta
 
+# Dictionnaire pour stocker temporairement les fichiers
+temp_files = {}
+
+@app.route('/fill-document-and-store', methods=['POST'])
+def fill_document_and_store():
+    """
+    Remplit le document et retourne un ID unique pour le télécharger
+    """
+    try:
+        # Récupérer les données JSON
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'Aucune donnée fournie'}), 400
+        
+        # Remplir le document
+        output_path, output_filename = fill_suivi_formation(data, TEMPLATE_PATH)
+        
+        # Générer un ID unique
+        file_id = str(uuid.uuid4())
+        
+        # Stocker le chemin du fichier avec timestamp
+        temp_files[file_id] = {
+            'path': output_path,
+            'filename': output_filename,
+            'created_at': datetime.now()
+        }
+        
+        # Créer l'URL de téléchargement
+        download_url = f"{request.url_root}download/{file_id}"
+        
+        return jsonify({
+            'success': True,
+            'filename': output_filename,
+            'download_url': download_url,
+            'file_id': file_id
+        })
+    
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'type': type(e).__name__
+        }), 500
+
+
+@app.route('/download/<file_id>', methods=['GET'])
+def download_file(file_id):
+    """
+    Télécharge un fichier via son ID unique
+    """
+    if file_id not in temp_files:
+        return jsonify({'error': 'Fichier non trouvé ou expiré'}), 404
+    
+    file_info = temp_files[file_id]
+    
+    # Vérifier si le fichier n'est pas trop vieux (1 heure max)
+    if datetime.now() - file_info['created_at'] > timedelta(hours=1):
+        del temp_files[file_id]
+        return jsonify({'error': 'Fichier expiré'}), 404
+    
+    # Retourner le fichier
+    return send_file(
+        file_info['path'],
+        as_attachment=True,
+        download_name=file_info['filename'],
+        mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    )
+    
 if __name__ == '__main__':
     # Vérifier que le template existe
     if not os.path.exists(TEMPLATE_PATH):
